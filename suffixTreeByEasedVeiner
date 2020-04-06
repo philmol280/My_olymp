@@ -1,0 +1,214 @@
+#include <iostream>
+#include <algorithm>
+#include <vector>
+#include <cmath>
+#include <climits>
+#include <unordered_set>
+#include <set>
+#include <map>
+#include <iomanip>
+#include <cstdlib>
+#include <string>
+#include <cstring>
+#include <fstream>
+#include <cstdio>
+#include <sstream>
+#include <clocale>
+
+using namespace std;
+string s;
+
+struct vertex {
+	struct edge {
+		int l, siz;
+		vertex* to;
+		edge(int l = 0, int siz = 0, vertex* to = nullptr) : l(l), siz(siz), to(to) {}
+	};
+	vertex* par;
+	char par_c;
+	set<int> num_suf;
+	map<char, edge> links;
+	map<char, vertex*> pref_links;
+	vertex(vertex* par = nullptr) : par(par) {}
+};
+
+void dfs(vertex* t) {
+	if (!t->num_suf.empty())
+		return;
+	for (auto el : t->links) {
+		dfs(el.second.to);
+		for (auto el2 : el.second.to->num_suf)
+			t->num_suf.insert(el2);
+	}
+}
+
+void build(string& s, vertex* t) {
+	vertex* fictive = new vertex();
+	for (char i = 'A'; i < 'z'; i++) {
+		fictive->pref_links[i] = t;
+		fictive->links[i] = vertex::edge(0, 1, t);
+	}
+	t->par_c = 'A';
+	t->par = fictive;
+	fictive->pref_links['$'] = t;
+	s.push_back('$');
+	int n = s.length();
+	vertex* last_vertex = t;
+	vector<vertex*> stack;
+	stack.reserve(n);
+	for (int i = n - 1; i > -1; i--) {
+		if (i == 1)
+			s[i] = s[i];
+		int now_height = n - i;
+		while (!last_vertex->pref_links.count(s[i])) {
+			stack.push_back(last_vertex);
+			now_height -= last_vertex->par->links[last_vertex->par_c].siz;
+			last_vertex = last_vertex->par;
+		}		
+		vertex* w = last_vertex->pref_links[s[i]];
+		int to_split = 0;
+		if (!w->links.count(s[i + now_height])) {
+			vertex* tmp = new vertex(w);
+			tmp->par_c = s[i + now_height];
+			w->links[s[i + now_height]] = vertex::edge(i + now_height, n - i - now_height, tmp);
+			stack[0]->pref_links[s[i]] = tmp;
+			tmp->num_suf.insert(i);
+			last_vertex = tmp;
+			stack.clear();
+			continue;
+		}
+		//if ((stack.back())->par_c == '$')
+		//	stack.pop_back();
+		vertex::edge u = w->links[s[i + now_height]];
+		vertex* last = nullptr;
+		int a = 0;
+		for (; !stack.empty() && s[i + now_height] == s[u.l + to_split];) {
+			a = (stack.back())->par->links[(stack.back())->par_c].siz;
+			to_split += a;
+			now_height += a;
+			last = stack.back();
+			stack.pop_back();
+		}
+		stack.push_back(last);
+		if (to_split == 0) {
+			vertex* tmp = new vertex(w);
+			tmp->par_c = s[i + now_height];
+			w->links[s[i + now_height]] = vertex::edge(i + now_height, n - i - now_height, tmp);
+			if (!stack.empty())
+				stack[0]->pref_links[s[i]] = tmp;
+			tmp->num_suf.insert(i);
+			last_vertex = tmp;
+		}
+		else {
+			vertex* tmp = new vertex(w);
+			vertex* tmp2 = new vertex(w);
+			tmp2->links[s[u.l + to_split]] = vertex::edge(u.l + to_split, w->links[s[u.l]].siz - to_split, u.to);
+			u.to->par = tmp2;
+			u.to->par_c = s[u.l + to_split];
+			w->links[s[u.l]].siz = to_split;
+			w->links[s[u.l]].to = tmp2;
+			tmp2->par_c = s[u.l];
+			tmp2->links[s[i + now_height]] = vertex::edge(i + now_height, (n - i) - now_height, tmp);
+			tmp->par_c = s[i + now_height];
+			tmp->par = tmp2;
+			tmp->num_suf.insert(i);
+			(stack.back())->pref_links[s[i]] = tmp2;
+			stack[0]->pref_links[s[i]] = tmp;
+			last_vertex = tmp;
+		}
+		stack.clear();
+	}
+	dfs(t);
+}
+
+set<int> finds(const string& s2, vertex* t) {
+	set<int> ans;
+	int it = 0;
+	vertex* now_t = t;
+	bool found = false;
+	while (it < s2.length()) {
+		if (!now_t->links.count(s2[it]))
+			return set<int>();
+		char c = s2[it];
+		int siz = now_t->links[c].siz, l = now_t->links[c].l;
+		for (int i = l; i < l + siz; i++) {
+			if (s2[it++] != s[i]) {
+				return set<int>();
+			}
+			if (it >= s2.length()) {
+				found = true;
+				break;
+			}
+		}
+		now_t = now_t->links[c].to;
+		if (found)
+			break;
+	}
+	return now_t->num_suf;
+}
+
+signed main() {
+	vertex* t = new vertex();
+	//cin >> s;
+	s = "mississippi";
+	build(s, t);
+	t;
+	string s2;
+	cin >> s2;
+	set<int> ans = finds(s2, t);
+	for (auto el : ans)
+		cout << el << ' ';
+	return 0;
+}
+/*#include <iostream>
+#include <algorithm>
+#include <string>
+#include <map>
+
+using namespace std;
+
+const int MAXLEN = 600000;
+string s;
+int pos[MAXLEN], len[MAXLEN], par[MAXLEN];
+map<char, int> to[MAXLEN], link[MAXLEN];
+int sz = 2;
+int path[MAXLEN];
+
+void attach(int child, int parent, char c, int child_len)
+{
+	to[parent][c] = child;
+	len[child] = child_len;
+	par[child] = parent;
+}
+
+void extend(int i)
+{
+	int v, vlen = s.size() - i, old = sz - 1, pstk = 0;
+	for (v = old; !link[v].count(s[i]); v = par[v]) {
+		vlen -= len[v];
+		path[pstk++] = v;
+	}
+	int w = link[v][s[i]];
+	if (to[w].count(s[i + vlen])) {
+		int u = to[w][s[i + vlen]];
+		for (pos[sz] = pos[u] - len[u]; s[pos[sz]] == s[i + vlen]; pos[sz] += len[v]) {
+			v = path[--pstk];
+			vlen += len[v];
+		}
+		attach(sz, w, s[pos[u] - len[u]], len[u] - (pos[u] - pos[sz]));
+		attach(u, sz, s[pos[sz]], pos[u] - pos[sz]);
+		w = link[v][s[i]] = sz++;
+	}
+	link[old][s[i]] = sz;
+	attach(sz, w, s[i + vlen], s.size() - (i + vlen));
+	pos[sz++] = s.size();
+}
+
+int main() {
+	len[1] = 1; pos[1] = 0; par[1] = 0;
+	for (int c = 0; c < 256; c++)
+		link[0][c] = 1;
+	s = "mississippi$";
+	for (int i = s.size() - 1; i >= 0; i--)
+		extend(i);
+}*/
